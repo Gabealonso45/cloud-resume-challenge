@@ -4,9 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'GetVisitorCount/**'
-      - 'host.json'
+  workflow_dispatch:
 
 env:
   AZURE_FUNCTIONAPP_NAME: visitorcounterforresumesite
