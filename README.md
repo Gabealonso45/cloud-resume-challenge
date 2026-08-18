@@ -21,6 +21,9 @@ Azure Functions (HTTP trigger, Node.js)
    ▼
 Azure Cosmos DB
   (visitor counter document)
+
+GitHub Actions (OIDC) ──deploys──► Azure Function App
+  on every push to main
 ```
 
 - **Frontend** — a single static `index.html` (HTML/CSS/vanilla JS), hosted on an
@@ -36,13 +39,18 @@ Azure Cosmos DB
   this over `fetch()` rather than talking to the database directly.
 - **Database** — Azure Cosmos DB stores a single counter document, incremented on
   every page load.
+- **CI/CD** — a GitHub Actions workflow authenticates to Azure via OpenID Connect
+  (no stored passwords or publish profiles) and redeploys the Function App
+  automatically on every push to `main`.
 
 ## What this demonstrates
 
 - Standing up static hosting behind a CDN with a custom domain and managed TLS
 - Designing a small API layer instead of exposing a database directly to the browser
-- Debugging a full request path across DNS, CDN, compute, and database layers when
-  things didn't work on the first try (see below)
+- Setting up passwordless CI/CD with OIDC federated credentials between GitHub and
+  Microsoft Entra ID
+- Debugging a full request path across DNS, CDN, compute, database, and CI/CD layers
+  when things didn't work on the first try (see below)
 
 ## Notable issues hit along the way
 
@@ -61,11 +69,24 @@ Azure Cosmos DB
   header, producing a duplicate value that browsers reject outright (`net::ERR_FAILED`
   despite an HTTP 200). Fixed by removing the header from application code and
   relying on the platform-level CORS configuration exclusively.
+- **Publish-profile deployment silently broken** — the Function App's downloadable
+  publish profile returned masked `REDACTED` credentials instead of real ones,
+  causing every GitHub Actions deployment to fail with a 401 regardless of how
+  correctly it was copied. Resolved by switching the workflow to OIDC: creating a
+  Microsoft Entra app registration, granting it a Contributor role on the resource
+  group, and configuring a federated credential trusting GitHub's OIDC issuer — no
+  password ever leaves Azure.
+- **Federated credential subject mismatch** — the first federated credential was
+  created using the plain `repo:owner/repo-name:ref:refs/heads/main` subject format,
+  but GitHub's actual token included numeric suffixes on both the owner and repo name
+  (a side effect of the repository having been renamed). Fixed by reading the exact
+  subject string out of the `AADSTS700213` error message and recreating the
+  federated credential to match it precisely.
 
 ## Tech stack
 
 Azure Storage (static website) · Azure Front Door · Azure DNS · Azure Functions
-(Node.js, Consumption plan) · Azure Cosmos DB
+(Node.js, Consumption plan) · Azure Cosmos DB · GitHub Actions (OIDC)
 
 ## Author
 
